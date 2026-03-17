@@ -41,6 +41,7 @@ def ler(nome):
     else:
         raise Exception(f"Formato não suportado: {ext}")
 
+    # padroniza colunas
     df.columns = (
         df.columns
         .astype(str)
@@ -63,74 +64,73 @@ def garantir_coluna(df, coluna):
     return df
 
 
-def ordenar(df, coluna="2026"):
-    if coluna in df.columns:
-        return df.sort_values(coluna, ascending=False)
+def preparar_df(df):
+    for col in ["2025", "2026", "META", "MARGEM", "CODFILIAL"]:
+        df = garantir_coluna(df, col)
+
+    for col in ["2025", "2026", "META", "MARGEM"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
     return df
 
 
-def linha(row):
-    return " | ".join([f"{col}:{row[col]}" for col in row.index])
+def gerar_linha(row, tipo):
+
+    partes = [f"TIPO:{tipo}"]
+
+    for col in row.index:
+
+        valor = row[col]
+
+        # evita quebrar formato
+        if isinstance(valor, str):
+            valor = valor.replace("|", " ").strip()
+
+        partes.append(f"{col}:{valor}")
+
+    return " | ".join(partes)
 
 
 # ===============================
-# LEITURA
+# LEITURA DOS ARQUIVOS
 # ===============================
 
 print("📥 Lendo arquivos...")
 
-cliente = ler("CLIENTE")
-filial = ler("FILIAL")
-vendedor = ler("VENDEDOR")
-grupo = ler("GRUPO")
+cliente = preparar_df(ler("CLIENTE"))
+filial = preparar_df(ler("FILIAL"))
+vendedor = preparar_df(ler("VENDEDOR"))
+grupo = preparar_df(ler("GRUPO"))
 
 
 # ===============================
-# TRATAMENTO
+# GERAÇÃO DO TEXTO
 # ===============================
 
-for df in [cliente, filial, vendedor, grupo]:
-    for col in ["2025", "2026", "CODFILIAL"]:
-        df = garantir_coluna(df, col)
+print("🧠 Gerando base estruturada...")
 
-for df in [cliente, filial, vendedor, grupo]:
-    for col in ["2025", "2026"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+linhas = []
 
-
-# ===============================
-# GERAR TEXTO
-# ===============================
-
-print("🧠 Gerando base...")
-
-texto = ""
-texto += "BASE COMERCIAL CANTU\n"
-texto += "ANALISE COMERCIAL INTELIGENTE\n\n"
+linhas.append("BASE COMERCIAL CANTU")
+linhas.append(f"ATUALIZADO EM: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+linhas.append("")
 
 
 # FILIAIS
-texto += "============================\nINSIGHT FILIAIS\n============================\n\n"
-for i, (_, f) in enumerate(ordenar(filial).iterrows(), start=1):
-    texto += f"RANKING:{i} | {linha(f)}\n"
-
+for _, row in filial.iterrows():
+    linhas.append(gerar_linha(row, "FILIAL"))
 
 # CLIENTES
-texto += "\n============================\nTOP CLIENTES\n============================\n\n"
-for i, (_, c) in enumerate(ordenar(cliente).head(20).iterrows(), start=1):
-    texto += f"RANKING:{i} | {linha(c)}\n"
-
+for _, row in cliente.iterrows():
+    linhas.append(gerar_linha(row, "CLIENTE"))
 
 # VENDEDORES
-texto += "\n============================\nTOP VENDEDORES\n============================\n\n"
-for i, (_, v) in enumerate(ordenar(vendedor).head(20).iterrows(), start=1):
-    texto += f"RANKING:{i} | {linha(v)}\n"
-
+for _, row in vendedor.iterrows():
+    linhas.append(gerar_linha(row, "VENDEDOR"))
 
 # GRUPOS
-texto += "\n============================\nTOP CATEGORIAS\n============================\n\n"
-for i, (_, g) in enumerate(ordenar(grupo).head(20).iterrows(), start=1):
-    texto += f"RANKING:{i} | {linha(g)}\n"
+for _, row in grupo.iterrows():
+    linhas.append(gerar_linha(row, "GRUPO"))
 
 
 # ===============================
@@ -140,25 +140,24 @@ for i, (_, g) in enumerate(ordenar(grupo).head(20).iterrows(), start=1):
 os.makedirs(PASTA_DADOS, exist_ok=True)
 
 with open(ARQUIVO_SAIDA, "w", encoding="utf-8") as f:
-    f.write(texto)
+    f.write("\n".join(linhas))
 
-print(f"✅ Base gerada: {ARQUIVO_SAIDA}")
+print(f"✅ Base gerada com sucesso: {ARQUIVO_SAIDA}")
 
 
 # ===============================
 # GIT AUTOMÁTICO
 # ===============================
 
-def run_git(comando):
-    return subprocess.run(comando, cwd="/Users/julianodesa/Downloads/ia-agentes-dados")
+def run_git(cmd):
+    return subprocess.run(cmd, cwd="/Users/julianodesa/Downloads/ia-agentes-dados")
 
 
-print("🚀 Atualizando GitHub...")
+print("🚀 Enviando para GitHub...")
 
 try:
     run_git(["git", "add", "."])
 
-    # commit só se tiver alteração
     status = subprocess.run(
         ["git", "status", "--porcelain"],
         capture_output=True,
@@ -167,15 +166,15 @@ try:
     )
 
     if status.stdout.strip() == "":
-        print("ℹ️ Nenhuma alteração para commit")
+        print("ℹ️ Nenhuma alteração detectada")
     else:
-        mensagem = f"Atualizacao automatica Cantu {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-        run_git(["git", "commit", "-m", mensagem])
+        msg = f"Atualizacao automatica Cantu {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+        run_git(["git", "commit", "-m", msg])
         run_git(["git", "push"])
-        print("✅ GitHub atualizado com sucesso!")
+        print("✅ GitHub atualizado!")
 
 except Exception as e:
-    print("❌ Erro ao atualizar Git:", e)
+    print("❌ Erro no Git:", e)
 
 
 print("🏁 PROCESSO FINALIZADO")
