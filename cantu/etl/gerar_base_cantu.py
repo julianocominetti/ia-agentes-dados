@@ -14,6 +14,8 @@ PASTA_DADOS = f"{BASE_DIR}/dados"
 
 ARQUIVO_SAIDA = f"{PASTA_DADOS}/base_cantu.txt"
 
+REPO_DIR = "/Users/julianodesa/Downloads/ia-agentes-dados"
+
 
 # ===============================
 # LEITOR UNIVERSAL
@@ -41,7 +43,6 @@ def ler(nome):
     else:
         raise Exception(f"Formato não suportado: {ext}")
 
-    # padroniza colunas
     df.columns = (
         df.columns
         .astype(str)
@@ -65,6 +66,7 @@ def garantir_coluna(df, coluna):
 
 
 def preparar_df(df):
+
     for col in ["2025", "2026", "META", "MARGEM", "CODFILIAL"]:
         df = garantir_coluna(df, col)
 
@@ -82,7 +84,6 @@ def gerar_linha(row, tipo):
 
         valor = row[col]
 
-        # evita quebrar formato
         if isinstance(valor, str):
             valor = valor.replace("|", " ").strip()
 
@@ -92,7 +93,7 @@ def gerar_linha(row, tipo):
 
 
 # ===============================
-# LEITURA DOS ARQUIVOS
+# EXECUÇÃO PRINCIPAL
 # ===============================
 
 print("📥 Lendo arquivos...")
@@ -102,10 +103,6 @@ filial = preparar_df(ler("FILIAL"))
 vendedor = preparar_df(ler("VENDEDOR"))
 grupo = preparar_df(ler("GRUPO"))
 
-
-# ===============================
-# GERAÇÃO DO TEXTO
-# ===============================
 
 print("🧠 Gerando base estruturada...")
 
@@ -134,7 +131,7 @@ for _, row in grupo.iterrows():
 
 
 # ===============================
-# SALVAR TXT
+# SALVAR ARQUIVO
 # ===============================
 
 os.makedirs(PASTA_DADOS, exist_ok=True)
@@ -142,39 +139,51 @@ os.makedirs(PASTA_DADOS, exist_ok=True)
 with open(ARQUIVO_SAIDA, "w", encoding="utf-8") as f:
     f.write("\n".join(linhas))
 
-print(f"✅ Base gerada com sucesso: {ARQUIVO_SAIDA}")
+print(f"✅ Base gerada: {ARQUIVO_SAIDA}")
 
 
 # ===============================
-# GIT AUTOMÁTICO
+# GIT AUTOMÁTICO (ROBUSTO)
 # ===============================
 
 def run_git(cmd):
-    return subprocess.run(cmd, cwd="/Users/julianodesa/Downloads/ia-agentes-dados")
+    result = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, text=True)
+    return result
 
 
-print("🚀 Enviando para GitHub...")
+print("🚀 Atualizando GitHub...")
 
 try:
     run_git(["git", "add", "."])
 
-    status = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        cwd="/Users/julianodesa/Downloads/ia-agentes-dados"
-    )
+    status = run_git(["git", "status", "--porcelain"])
 
     if status.stdout.strip() == "":
-        print("ℹ️ Nenhuma alteração detectada")
+        print("ℹ️ Nenhuma alteração para commit")
+
     else:
-        msg = f"Atualizacao automatica Cantu {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-        run_git(["git", "commit", "-m", msg])
-        run_git(["git", "push"])
-        print("✅ GitHub atualizado!")
+        mensagem = f"Atualizacao automatica Cantu {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+
+        commit = run_git(["git", "commit", "-m", mensagem])
+
+        if "error" in commit.stderr.lower():
+            print("❌ Erro no commit:", commit.stderr)
+
+        # 🔥 RESOLVE SEU PROBLEMA
+        pull = run_git(["git", "pull", "--rebase", "origin", "main"])
+
+        if "error" in pull.stderr.lower():
+            print("⚠️ Erro no pull:", pull.stderr)
+
+        push = run_git(["git", "push"])
+
+        if "error" in push.stderr.lower():
+            print("❌ Erro no push:", push.stderr)
+        else:
+            print("✅ GitHub atualizado com sucesso!")
 
 except Exception as e:
-    print("❌ Erro no Git:", e)
+    print("❌ Falha geral no Git:", e)
 
 
 print("🏁 PROCESSO FINALIZADO")
